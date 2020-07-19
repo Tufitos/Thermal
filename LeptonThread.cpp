@@ -5,7 +5,7 @@
 #include "Palettes.h"
 #include "SPI.h"
 #include "Lepton_I2C.h"
-
+#include <QString>
 #define PACKET_SIZE 164
 #define PACKET_SIZE_UINT16 (PACKET_SIZE/2)
 #define PACKETS_PER_FRAME 60
@@ -31,7 +31,7 @@ LeptonThread::LeptonThread() : QThread()
 	spiSpeed = 20 * 1000 * 1000; // SPI bus speed 20MHz
 
 	// min/max value for scaling
-	autoRangeMin = true;
+	autoRangeMin = false;
 	autoRangeMax = true;
 	rangeMin = 30000;
 	rangeMax = 32000;
@@ -88,8 +88,8 @@ void LeptonThread::useSpiSpeedMhz(unsigned int newSpiSpeed)
 
 void LeptonThread::setAutomaticScalingRange()
 {
-	autoRangeMin = false;
-	autoRangeMax = false;
+	autoRangeMin = true;
+	autoRangeMax = true;
 }
 
 void LeptonThread::useRangeMinValue(uint16_t newMinValue)
@@ -189,7 +189,7 @@ void LeptonThread::run()
 
 		if ((autoRangeMin == true) || (autoRangeMax == true)) {
 			if (autoRangeMin == true) {
-				maxValue = 65535;
+				minValue = 65535;
 			}
 			if (autoRangeMax == true) {
 				maxValue = 0;
@@ -215,14 +215,17 @@ void LeptonThread::run()
 					}
 				}
 			}
+
 			diff = maxValue - minValue;
 			scale = 255/diff;
 		}
-
+	    
 		int row, column;
 		uint16_t value;
 		uint16_t valueFrameBuffer;
 		QRgb color;
+		QRgb red;
+		red = qRgb(255, 0, 0);
 		for(int iSegment = iSegmentStart; iSegment <= iSegmentStop; iSegment++) {
 			int ofsRow = 30 * (iSegment - 1);
 			for(int i=0;i<FRAME_SIZE_UINT16;i++) {
@@ -230,7 +233,7 @@ void LeptonThread::run()
 				if(i % PACKET_SIZE_UINT16 < 2) {
 					continue;
 				}
-
+				
 				//flip the MSB and LSB at the last second
 				valueFrameBuffer = (shelf[iSegment - 1][i*2] << 8) + shelf[iSegment - 1][i*2+1];
 				if (valueFrameBuffer == 0) {
@@ -253,10 +256,18 @@ void LeptonThread::run()
 					row = i / PACKET_SIZE_UINT16 / 2 + ofsRow;
 				}
 				else {
-					column = (i % PACKET_SIZE_UINT16) - 2;
+					column = (i % PACKET_SIZE_UINT16) - 2; 
 					row = i / PACKET_SIZE_UINT16;
 				}
-				myImage.setPixel(column, row, color);
+				
+				if(maxValue >31000){
+					myImage.setPixel(column, row, red);
+					printf("%d",maxValue);
+				}
+				else{
+					myImage.setPixel(column, row, color);
+					printf("%d",maxValue);
+				}
 			}
 		}
 
@@ -272,7 +283,7 @@ void LeptonThread::run()
 	//finally, close SPI port just bcuz
 	SpiClosePort(0);
 }
-
+ 
 void LeptonThread::performFFC() {
 	//perform FFC
 	lepton_perform_ffc();
